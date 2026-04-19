@@ -1023,9 +1023,20 @@
             ${noteLine}
           </div>`;
       } else if (stop.campsite) {
+        const notes = []
+          .concat(stop.campsite_note ? [stop.campsite_note] : [])
+          .concat(Array.isArray(stop.campsite_notes) ? stop.campsite_notes : []);
+        const noteLine = notes.length
+          ? notes.map(n => `<div class="popup__campsite-note">${escapeHtml(n)}</div>`).join('')
+          : '';
+        const phoneLine = stop.campsite_phone
+          ? `<div class="popup__campsite-note">📞 <a href="tel:${escapeHtml(stop.campsite_phone.replace(/\s+/g, ''))}">${escapeHtml(stop.campsite_phone)}</a></div>`
+          : '';
         campsiteBlock = `
           <div class="popup__campsite">
             <div class="popup__campsite-name">🏕️ ${escapeHtml(stop.campsite)}</div>
+            ${phoneLine}
+            ${noteLine}
           </div>`;
       }
 
@@ -1235,7 +1246,7 @@
           <div class="sidebar__meta">
             🚗 ${constants.total_distance_km.toLocaleString('en-GB')} km<br>
             👥 ${meta.who.join(', ')}<br>
-            🚐 ${escapeHtml(meta.van)}
+            🚐 ${escapeHtml(meta.van)}${meta.van_video_url ? ` <a href="${meta.van_video_url}" target="_blank" rel="noopener" title="Watch Ahorn ACA overview" style="color:var(--accent);text-decoration:none;font-weight:700;margin-left:2px">▶</a>` : ''}
           </div>
         </div>
 
