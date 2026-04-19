@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wohnmobil Road Trip — May 2026</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <style>
+    :root {
+      --accent: #e67e22;
+      --text: #333;
+      --muted: #666;
+      --bg: #fff;
+      --line: #ececec;
+      --shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--text);
+    }
+    #map {
+      position: absolute;
+      left: 280px;
+      right: 0;
+      top: 0;
+      bottom: 54px;
+      background: #f5f5f5;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 44px;
+      width: 280px;
+      background: #fff;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.08);
+      overflow-y: auto;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar__header {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .sidebar__title {
+      font-size: 17px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: var(--text);
+      line-height: 1.25;
+    }
+    .sidebar__dates {
+      font-size: 12.5px;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .sidebar__meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .sidebar__section {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .sidebar__section h2 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+    .totals-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-size: 12.5px;
+    }
+    .totals-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 4px 0;
+      gap: 8px;
+    }
+    .totals-list .label {
+      color: var(--text);
+    }
+    .totals-list .value {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .totals-list .grand {
+      border-top: 1px solid var(--line);
+      margin-top: 6px;
+      padding-top: 8px;
+      font-weight: 700;
+    }
+    .totals-list .grand .label { color: var(--text); }
+    .totals-list .grand .value { color: var(--accent); font-size: 14px; }
+    .split-paid {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .split-paid .done { color: #1d7a3f; }
+    .split-paid .todo { color: #9a2d2d; }
+
+    .warning {
+      background: #fff7d6;
+      border: 1px solid #f1d87a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .warning a { color: #7a5b00; font-weight: 600; }
+    .warning:last-child { margin-bottom: 0; }
+
+    .book-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-size: 12.5px;
+    }
+    .book-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.12s ease;
+    }
+    .book-list li:hover { background: #f6f6f6; }
+    .book-list .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .book-list .name { flex: 1; }
+    .book-list .paid { font-size: 10.5px; }
+    .book-list li.is-paid { opacity: 0.55; }
+    .book-list li.is-paid .name { text-decoration: line-through; }
+
+    /* Push budget to bottom */
+    .sidebar__spacer { flex: 1; }
+
+    /* Collapsible budget footer */
+    .sidebar__budget {
+      border-top: 1px solid var(--line);
+      background: #fafafa;
+    }
+    .sidebar__budget > summary {
+      padding: 12px 18px;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      font-size: 13px;
+    }
+    .sidebar__budget > summary::-webkit-details-marker { display: none; }
+    .sidebar__budget > summary::before {
+      content: '▶';
+      display: inline-block;
+      margin-right: 8px;
+      font-size: 10px;
+      color: var(--muted);
+      transition: transform 0.15s ease;
+    }
+    .sidebar__budget[open] > summary::before {
+      transform: rotate(90deg);
+    }
+    .sidebar__budget-label {
+      flex: 1;
+      font-weight: 600;
+    }
+    .sidebar__budget-total {
+      color: var(--accent);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .sidebar__budget > .totals-list {
+      padding: 4px 18px 14px;
+    }
+
+    /* Timeline */
+    .timeline {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 54px;
+      background: #fff;
+      border-top: 1px solid var(--line);
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+      display: flex;
+      z-index: 500;
+    }
+    .timeline__cell {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      border-right: 1px solid rgba(255,255,255,0.35);
+      transition: transform 0.12s ease, filter 0.12s ease;
+      user-select: none;
+    }
+    .timeline__name {
+      position: absolute;
+      top: 4px;
+      left: 3px;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.98);
+      text-shadow: 0 1px 1px rgba(0,0,0,0.25);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+      padding-right: 3px;
+    }
+    .timeline__cell:last-child { border-right: none; }
+    .timeline__cell:hover {
+      filter: brightness(1.1);
+      z-index: 1;
+    }
+    .timeline__cell--empty {
+      background: #f0f0f0 !important;
+      color: #999;
+      cursor: default;
+    }
+    .timeline__cell--empty:hover { filter: none; }
+    .timeline__cake {
+      position: absolute;
+      top: 2px;
+      right: 3px;
+      font-size: 10px;
+      line-height: 1;
+    }
+    .timeline__day {
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .timeline__cell {
+      transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 0.25s ease, filter 0.12s ease;
+    }
+    .timeline__cell--active {
+      transform: translateY(-6px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.22), inset 0 0 0 2px rgba(255,255,255,0.9);
+      filter: brightness(1.08) saturate(1.15);
+      z-index: 3;
+    }
+    .timeline__cell--active .timeline__day {
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    /* Mobile sidebar toggle button */
+    .menu-toggle {
+      display: none;
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 700;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: #fff;
+      border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      font-size: 20px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .menu-toggle:active { transform: scale(0.96); }
+
+    /* Mobile-only backdrop shown when sidebar is open */
+    .sidebar-backdrop {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 600;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .sidebar-backdrop--visible {
+      display: block;
+      opacity: 1;
+    }
+
+    /* Mobile layout: <768px */
+    @media (max-width: 767px) {
+      #map {
+        left: 0;
+      }
+      .menu-toggle {
+        display: flex;
+      }
+      .sidebar {
+        width: min(88vw, 340px);
+        transform: translateX(-100%);
+        transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        z-index: 800;
+      }
+      .sidebar--open {
+        transform: translateX(0);
+      }
+      /* Leaflet zoom controls would collide with the ☰ button — nudge them */
+      .leaflet-top.leaflet-left {
+        left: 60px;
+      }
+      /* Popup a bit narrower on small screens */
+      .leaflet-popup-content {
+        width: 260px !important;
+      }
+      .popup__nav button {
+        max-width: 90px;
+      }
+      /* Make lifted timeline cells a bit less pronounced so they don't dominate */
+      .timeline__cell--active {
+        transform: translateY(-4px);
+      }
+    }
+    .timeline__van {
+      position: absolute;
+      top: -18px;
+      font-size: 20px;
+      line-height: 1;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateX(-50%) translateY(4px);
+      transition: opacity 0.2s ease, left 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2), transform 0.25s ease;
+      z-index: 10;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));
+    }
+    .timeline__van--visible {
+      opacity: 1;
+      animation: van-hop 1.6s infinite ease-in-out;
+    }
+    @keyframes van-hop {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50%      { transform: translateX(-50%) translateY(-4px); }
+    }
+
+    /* Markers */
+    .stop-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+      border: 2px solid #fff;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .leaflet-div-icon.stop-marker-wrap {
+      background: transparent;
+      border: none;
+    }
+
+    /* Route polylines: solid by default, dashed/animated only for the active incoming leg */
+    .trip-segment {
+      transition: stroke-width 0.2s ease, opacity 0.2s ease;
+    }
+    .trip-segment--active {
+      stroke-dasharray: 8 10;
+      animation: dash 1.2s linear infinite;
+      stroke-width: 4 !important;
+    }
+    @keyframes dash {
+      to { stroke-dashoffset: -18; }
+    }
+
+    /* Popup */
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px;
+      padding: 0;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    }
+    .leaflet-popup-content {
+      margin: 0;
+      width: 300px !important;
+      max-height: 80vh;
+      overflow: auto;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    /* Smart popup sides — place away from the path */
+    /* Default side: N (above marker). Leaflet's native layout. */
+
+    /* S: below marker */
+    .leaflet-popup.popup-side-S .leaflet-popup-content-wrapper {
+      transform: translateY(calc(100% + 36px));
+    }
+    /* E: right of marker, vertically centered */
+    .leaflet-popup.popup-side-E .leaflet-popup-content-wrapper {
+      transform: translate(calc(50% + 24px), 50%);
+    }
+    /* W: left of marker, vertically centered */
+    .leaflet-popup.popup-side-W .leaflet-popup-content-wrapper {
+      transform: translate(calc(-50% - 24px), 50%);
+    }
+    /* Tip only makes sense for default N placement */
+    .leaflet-popup.popup-side-S .leaflet-popup-tip-container,
+    .leaflet-popup.popup-side-E .leaflet-popup-tip-container,
+    .leaflet-popup.popup-side-W .leaflet-popup-tip-container { display: none; }
+    /* Close button sticks to the original container — hide on shifted popups */
+    .leaflet-popup.popup-side-S .leaflet-popup-close-button,
+    .leaflet-popup.popup-side-E .leaflet-popup-close-button,
+    .leaflet-popup.popup-side-W .leaflet-popup-close-button { display: none; }
+    /* Shifted popups: make the empty original container click-through so markers behind it stay clickable.
+       Only re-enable pointer events on the actual (transformed) content wrapper. */
+    .leaflet-popup.popup-side-S,
+    .leaflet-popup.popup-side-E,
+    .leaflet-popup.popup-side-W {
+      pointer-events: none;
+    }
+    .leaflet-popup.popup-side-S .leaflet-popup-content-wrapper,
+    .leaflet-popup.popup-side-E .leaflet-popup-content-wrapper,
+    .leaflet-popup.popup-side-W .leaflet-popup-content-wrapper {
+      pointer-events: auto;
+    }
+    .popup {
+      padding: 10px 14px 12px;
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+    .popup__nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin: 0 -4px 8px;
+      font-size: 11.5px;
+    }
+    .popup__nav button {
+      background: none;
+      border: none;
+      padding: 3px 6px;
+      cursor: pointer;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 11.5px;
+      border-radius: 4px;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .popup__nav button:hover {
+      background: #f0f0f0;
+      color: var(--text);
+    }
+    .popup__nav-spacer { visibility: hidden; }
+    .popup__head {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin: 0 0 2px;
+    }
+    .popup__title {
+      font-size: 17px;
+      font-weight: 700;
+      margin: 0;
+      color: var(--text);
+    }
+    .popup__flag { font-size: 16px; }
+    .popup__country {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-left: 2px;
+    }
+    .popup__dates {
+      color: var(--muted);
+      font-size: 12.5px;
+      margin: 2px 0 10px;
+    }
+    .popup__row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin: 4px 0;
+      font-size: 12.5px;
+    }
+    .popup__row .label { color: var(--muted); }
+    .popup__divider {
+      height: 1px;
+      background: var(--line);
+      margin: 10px 0;
+      border: none;
+    }
+    .popup__campsite {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 6px 0;
+    }
+    .popup__campsite-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+    .popup__campsite-price { font-size: 12px; color: var(--muted); }
+    .popup__campsite-note {
+      font-size: 12px;
+      color: #555;
+      margin-top: 4px;
+      font-style: italic;
+    }
+    .popup__campsite-note a {
+      color: var(--accent);
+      text-decoration: none;
+      font-style: normal;
+      font-weight: 600;
+    }
+    .popup__campsite-note a:hover { text-decoration: underline; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .badge--pre-yes { background: #fff1e0; color: #b86a0a; }
+    .badge--pre-rec { background: #fff8e0; color: #8d6d0a; }
+    .badge--pre-no  { background: #e8f5ee; color: #1d7a3f; }
+    .badge--paid    { background: #e8f5ee; color: #1d7a3f; }
+    .badge--due     { background: #fdecec; color: #9a2d2d; }
+    .badge--work    { background: #eef1f9; color: #3a4a7a; }
+    .badge--kid     { background: #fdecf4; color: #a8337a; padding: 4px 10px; font-size: 12px; }
+
+    /* Border warning */
+    .popup__border {
+      background: #fff7d6;
+      border: 1px solid #f1d87a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 8px 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .popup__border-title { font-weight: 700; margin-bottom: 2px; }
+
+    /* Action buttons */
+    .popup__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 10px;
+      border-radius: 6px;
+      text-decoration: none;
+      background: #f1f1f1;
+      color: var(--text);
+      border: 1px solid #e3e3e3;
+      transition: background 0.15s ease;
+    }
+    .btn:hover { background: #e8e8e8; }
+    .btn--primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn--primary:hover { background: #d06f17; }
+
+    /* Collapsible section */
+    .popup details {
+      margin-top: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+    .popup details > summary {
+      cursor: pointer;
+      list-style: none;
+      font-weight: 600;
+      font-size: 12.5px;
+      color: var(--text);
+      user-select: none;
+    }
+    .popup details > summary::-webkit-details-marker { display: none; }
+    .popup details > summary::before {
+      content: '▶';
+      display: inline-block;
+      margin-right: 6px;
+      font-size: 10px;
+      color: var(--muted);
+      transition: transform 0.15s ease;
+    }
+    .popup details[open] > summary::before {
+      transform: rotate(90deg);
+    }
+    .popup details[open] > summary {
+      margin-bottom: 6px;
+    }
+    .popup__top3 {
+      margin: 6px 0 8px;
+      padding-left: 18px;
+      font-size: 12.5px;
+    }
+    .popup__top3 li { margin: 2px 0; }
+    .popup__budget {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 6px 0;
+    }
+    .popup__tip {
+      background: #eef7ff;
+      border: 1px solid #c7e0f4;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 8px 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .popup__tip-title { font-weight: 700; margin-bottom: 2px; }
+    .popup__special {
+      background: #fff0e0;
+      border: 1px solid #ffcf99;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 8px 0;
+      font-size: 12px;
+      line-height: 1.4;
+      font-weight: 600;
+      color: #a15a12;
+    }
+
+    /* Load error */
+    .load-error {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      background: #fff;
+      z-index: 1000;
+    }
+    .load-error__card {
+      max-width: 520px;
+      padding: 1.5rem 1.75rem;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--accent);
+    }
+    .load-error code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+
+    /* Lock screen */
+    .lock {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, #fef6ec 0%, #fff 60%, #f6f0e6 100%);
+      z-index: 2000;
+    }
+    .lock__card {
+      width: 100%;
+      max-width: 380px;
+      background: #fff;
+      padding: 1.75rem 1.75rem 1.5rem;
+      border-radius: 14px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+      text-align: center;
+    }
+    .lock__icon { font-size: 40px; line-height: 1; margin-bottom: 0.5rem; }
+    .lock__title {
+      font-size: 19px;
+      font-weight: 700;
+      margin: 0 0 0.35rem;
+      color: var(--text);
+    }
+    .lock__sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 1.25rem;
+      line-height: 1.4;
+    }
+    .lock__form { display: flex; gap: 8px; }
+    .lock__input {
+      flex: 1;
+      min-width: 0;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 12px;
+      border: 1px solid #e3e3e3;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .lock__input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(230,126,34,0.15);
+    }
+    .lock__input:disabled { opacity: 0.6; }
+    .lock__btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .lock__btn:hover:not(:disabled) { background: #d06f17; }
+    .lock__btn:disabled { opacity: 0.6; cursor: wait; }
+    .lock__error {
+      margin-top: 0.75rem;
+      font-size: 12.5px;
+      color: #9a2d2d;
+      min-height: 1.2em;
+    }
+    .lock__hint {
+      margin-top: 1rem;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <button class="menu-toggle" id="menu-toggle" aria-label="Open menu" type="button">☰</button>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <div id="map"></div>
+  <footer class="timeline" id="timeline"></footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    // --- Encrypted trip data: fetch ciphertext, derive key from URL hash or prompt, decrypt, then init ---
+    (async function start() {
+      let encPayload;
+      try {
+        const res = await fetch('./data/trip.enc.json');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        encPayload = await res.json();
+      } catch (err) {
+        showLoadError(err);
+        return;
+      }
+
+      const hashPwd = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
+      if (hashPwd) {
+        const data = await tryDecrypt(encPayload, hashPwd);
+        if (data) { init(data); return; }
+      }
+      showLockScreen(encPayload);
+    })();
+
+    async function tryDecrypt(payload, password) {
+      try {
+        const fromB64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+        const salt = fromB64(payload.salt);
+        const iv = fromB64(payload.iv);
+        const ciphertext = fromB64(payload.ciphertext);
+        const baseKey = await crypto.subtle.importKey(
+          'raw',
+          new TextEncoder().encode(password),
+          { name: 'PBKDF2' },
+          false,
+          ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt, iterations: payload.iterations, hash: payload.hash || 'SHA-256' },
+          baseKey,
+          { name: payload.alg || 'AES-GCM', length: 256 },
+          false,
+          ['decrypt']
+        );
+        const plain = await crypto.subtle.decrypt(
+          { name: payload.alg || 'AES-GCM', iv },
+          key,
+          ciphertext
+        );
+        return JSON.parse(new TextDecoder().decode(plain));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function showLockScreen(encPayload) {
+      const overlay = document.createElement('div');
+      overlay.className = 'lock';
+      overlay.innerHTML = `
+        <div class="lock__card">
+          <div class="lock__icon">🔒</div>
+          <h1 class="lock__title">This trip is private</h1>
+          <p class="lock__sub">Enter the password to unlock the map.</p>
+          <form class="lock__form" id="lock-form" autocomplete="off">
+            <input type="password" class="lock__input" id="lock-input" placeholder="password" autofocus>
+            <button type="submit" class="lock__btn" id="lock-btn">Unlock</button>
+          </form>
+          <div class="lock__error" id="lock-error"></div>
+          <div class="lock__hint">Tip: add <code>#yourpassword</code> to the URL to skip this screen.</div>
+        </div>`;
+      document.body.appendChild(overlay);
+
+      const form = overlay.querySelector('#lock-form');
+      const input = overlay.querySelector('#lock-input');
+      const btn = overlay.querySelector('#lock-btn');
+      const errEl = overlay.querySelector('#lock-error');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const pwd = input.value;
+        if (!pwd) return;
+        btn.disabled = true; input.disabled = true; errEl.textContent = '';
+        const data = await tryDecrypt(encPayload, pwd);
+        if (data) {
+          history.replaceState(null, '', '#' + encodeURIComponent(pwd));
+          overlay.remove();
+          init(data);
+        } else {
+          btn.disabled = false; input.disabled = false;
+          errEl.textContent = 'Wrong password.';
+          input.select();
+        }
+      });
+    }
+
+    function showLoadError(err) {
+      const div = document.createElement('div');
+      div.className = 'load-error';
+      div.innerHTML = `
+        <div class="load-error__card">
+          <h2 style="margin:0 0 0.5rem;color:var(--accent)">Couldn't load trip data</h2>
+          <p style="margin:0 0 0.75rem">Browsers block <code>fetch()</code> on <code>file://</code> URLs.</p>
+          <p style="margin:0 0 0.75rem">Run a local server from the project root:</p>
+          <pre style="margin:0;background:#f4f4f4;padding:0.75rem;border-radius:6px;overflow:auto"><code>python3 -m http.server 8000</code></pre>
+          <p style="margin:0.75rem 0 0;font-size:0.9em;color:#666">Then open <code>http://localhost:8000</code></p>
+          <p style="margin:0.5rem 0 0;font-size:0.8em;color:#999">${err.message}</p>
+        </div>`;
+      document.body.appendChild(div);
+    }
+
+    // --- helpers ---
+    const AVG_SPEED_KMH = 80;
+    const CHF_TO_EUR = 1.05; // rough conversion for CH vignette
+
+    function formatDriveTime(km) {
+      if (!km) return '0h';
+      const hours = km / AVG_SPEED_KMH;
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      if (h === 0) return `${m}min`;
+      if (m === 0) return `${h}h`;
+      return `${h}h ${m}min`;
+    }
+
+    function fuelCostForLegEur(km, constants) {
+      return Math.round((km / 100) * constants.fuel_l_per_100km * constants.fuel_price_eur);
+    }
+
+    function formatDateRange(checkIn, checkOut, nights) {
+      const fmt = (iso) => {
+        if (!iso) return '';
+        const d = new Date(iso + 'T00:00:00');
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      };
+      if (!checkOut || nights === 0) {
+        return fmt(checkIn);
+      }
+      const nightsLabel = nights === 1 ? '1 night' : `${nights} nights`;
+      return `${fmt(checkIn)} → ${fmt(checkOut)} · ${nightsLabel}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    async function fetchRoadRoute(from, to) {
+      const key = `roadroute_v1:${from.coords[0]},${from.coords[1]}_${to.coords[0]},${to.coords[1]}`;
+      try {
+        const cached = localStorage.getItem(key);
+        if (cached) return JSON.parse(cached);
+      } catch (_) {}
+
+      const [lat1, lng1] = from.coords;
+      const [lat2, lng2] = to.coords;
+      const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const route = data.routes && data.routes[0];
+        if (!route) return null;
+        const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        try { localStorage.setItem(key, JSON.stringify(coords)); } catch (_) {}
+        return coords;
+      } catch (err) {
+        console.warn(`OSRM route fetch failed ${from.name} → ${to.name}:`, err);
+        return null;
+      }
+    }
+
+    function pickPopupSide(stop, prev, next) {
+      // Find where the path goes (average vector to neighbors), then place popup opposite.
+      let dLat = 0, dLng = 0, n = 0;
+      if (prev) { dLat += (prev.coords[0] - stop.coords[0]); dLng += (prev.coords[1] - stop.coords[1]); n++; }
+      if (next) { dLat += (next.coords[0] - stop.coords[0]); dLng += (next.coords[1] - stop.coords[1]); n++; }
+      if (!n) return 'N';
+      dLat /= n; dLng /= n;
+      // lng deltas foreshorten at higher latitudes; correct so pixel-space decisions align
+      const lngScale = Math.cos(stop.coords[0] * Math.PI / 180);
+      const absLat = Math.abs(dLat), absLng = Math.abs(dLng) * lngScale;
+      if (absLat >= absLng) {
+        return dLat > 0 ? 'S' : 'N'; // neighbors are N → popup S, and vice versa
+      }
+      return dLng > 0 ? 'W' : 'E';   // neighbors are E → popup W, and vice versa
+    }
+
+    function preRegBadge(stop) {
+      if (stop.campsite_paid === true || stop.campsite_booked === true) return '';
+      if (stop.pre_reg === 'yes') {
+        return `<span class="badge badge--pre-yes">📋 Book in advance!</span>`;
+      }
+      if (stop.pre_reg === 'recommended') {
+        return `<span class="badge badge--pre-rec">📋 Booking recommended</span>`;
+      }
+      return `<span class="badge badge--pre-no">🚪 Walk-in OK</span>`;
+    }
+
+    function paidBadge(isPaid, labelPaid = '✅ Paid', labelDue = '⏳ Due') {
+      if (isPaid === true) return `<span class="badge badge--paid">${labelPaid}</span>`;
+      if (isPaid === false) return `<span class="badge badge--due">${labelDue}</span>`;
+      return '';
+    }
+
+    function buildPopupHtml(stop, prev, next, constants) {
+      const hasLeg = prev && stop.distance_km_from_prev > 0;
+      const driveLine = hasLeg
+        ? `<div class="popup__row"><span class="label">🚗 From ${escapeHtml(prev.name)}:</span> ${formatDriveTime(stop.distance_km_from_prev)} · ${stop.distance_km_from_prev}km</div>`
+        : '';
+      const fuelLine = hasLeg
+        ? `<div class="popup__row"><span class="label">⛽ Fuel for leg:</span> ~€${fuelCostForLegEur(stop.distance_km_from_prev, constants)}</div>`
+        : '';
+
+      let campsiteBlock = '';
+      if (stop.campsite && stop.campsite_price_eur != null) {
+        const estimateTotal = stop.campsite_price_eur * (stop.nights || 0);
+        let paid;
+        if (stop.campsite_paid === true) paid = '<span class="badge badge--paid">✅ Paid</span>';
+        else if (stop.campsite_booked === true) paid = '<span class="badge badge--paid">✅ Booked</span>';
+        else if (stop.campsite_paid === false) paid = '<span class="badge badge--due">⏳ Due</span>';
+        else paid = '';
+        let priceLine;
+        if (stop.campsite_paid && stop.campsite_total_paid_eur != null) {
+          const chf = stop.campsite_total_paid_chf != null ? ` (CHF ${stop.campsite_total_paid_chf})` : '';
+          priceLine = `Paid €${stop.campsite_total_paid_eur}${chf}`;
+        } else {
+          priceLine = `€${stop.campsite_price_eur}/night${stop.nights ? ` · total €${estimateTotal}` : ''}`;
+        }
+        const notes = []
+          .concat(stop.campsite_note ? [stop.campsite_note] : [])
+          .concat(Array.isArray(stop.campsite_notes) ? stop.campsite_notes : []);
+        const noteLine = notes.length
+          ? notes.map(n => `<div class="popup__campsite-note">${escapeHtml(n)}</div>`).join('')
+          : '';
+        const phoneLine = stop.campsite_phone
+          ? `<div class="popup__campsite-note">📞 <a href="tel:${escapeHtml(stop.campsite_phone.replace(/\s+/g, ''))}">${escapeHtml(stop.campsite_phone)}</a></div>`
+          : '';
+        campsiteBlock = `
+          <div class="popup__campsite">
+            <div class="popup__campsite-name">🏕️ ${escapeHtml(stop.campsite)} ${paid}</div>
+            <div class="popup__campsite-price">${priceLine}</div>
+            ${phoneLine}
+            ${noteLine}
+          </div>`;
+      } else if (stop.campsite) {
+        campsiteBlock = `
+          <div class="popup__campsite">
+            <div class="popup__campsite-name">🏕️ ${escapeHtml(stop.campsite)}</div>
+          </div>`;
+      }
+
+      let vignetteBadge = '';
+      if (stop.vignette_paid !== undefined) {
+        const country = stop.country === 'CH' ? 'Swiss' : stop.country === 'AT' ? 'Austrian' : '';
+        vignetteBadge = `<div class="popup__row"><span class="label">🛣️ ${country} vignette:</span> ${paidBadge(stop.vignette_paid)}</div>`;
+      }
+
+      const border = stop.border
+        ? `<div class="popup__border">
+             <div class="popup__border-title">🛂 Border: ${escapeHtml(stop.border.crossing)}</div>
+             <div>${escapeHtml(stop.border.note)}</div>
+           </div>`
+        : '';
+
+      const workBadge = stop.work_day
+        ? `<span class="badge badge--work">💻 ${escapeHtml(stop.work_day_note || 'Work day')}</span>`
+        : '';
+
+      const actions = [];
+      if (stop.gmaps) actions.push(`<a class="btn" href="${stop.gmaps}" target="_blank" rel="noopener">📍 Maps</a>`);
+      if (stop.campsite_url) actions.push(`<a class="btn" href="${stop.campsite_url}" target="_blank" rel="noopener">🏕️ Campsite</a>`);
+      if (stop.campsite_booking_url) actions.push(`<a class="btn" href="${stop.campsite_booking_url}" target="_blank" rel="noopener">📝 Book</a>`);
+      if (stop.wikivoyage) actions.push(`<a class="btn" href="${stop.wikivoyage}" target="_blank" rel="noopener">📖 Wikivoyage</a>`);
+      if (Array.isArray(stop.campsite_links)) {
+        stop.campsite_links.forEach(link => {
+          if (link && link.url && link.label) {
+            actions.push(`<a class="btn" href="${link.url}" target="_blank" rel="noopener">${escapeHtml(link.label)}</a>`);
+          }
+        });
+      }
+
+      const top3 = (stop.top3 || []).map(t => `<li>${escapeHtml(t)}</li>`).join('');
+      const kid = stop.kid_highlight
+        ? `<div style="margin-bottom:6px"><span class="badge badge--kid">${escapeHtml(stop.kid_highlight)}</span></div>`
+        : '';
+      const dayTrip = stop.day_trip
+        ? `<div class="popup__tip"><div class="popup__tip-title">🗺️ Day trip idea</div>${escapeHtml(stop.day_trip)}</div>`
+        : '';
+      const special = stop.special
+        ? `<div class="popup__special">${escapeHtml(stop.special)}</div>`
+        : '';
+
+      const navPrev = prev
+        ? `<button type="button" onclick="goToStop(${prev.id})" title="Previous: ${escapeHtml(prev.name)}">‹ ${escapeHtml(prev.name)}</button>`
+        : `<span class="popup__nav-spacer">.</span>`;
+      const navNext = next
+        ? `<button type="button" onclick="goToStop(${next.id})" title="Next: ${escapeHtml(next.name)}">${escapeHtml(next.name)} ›</button>`
+        : `<span class="popup__nav-spacer">.</span>`;
+
+      return `
+        <div class="popup">
+          <div class="popup__nav">${navPrev}${navNext}</div>
+          <div class="popup__head">
+            <h3 class="popup__title">${escapeHtml(stop.name)}</h3>
+            <span class="popup__flag">${stop.flag || ''}</span>
+            <span class="popup__country">${escapeHtml(stop.country || '')}</span>
+          </div>
+          <div class="popup__dates">${formatDateRange(stop.check_in, stop.check_out, stop.nights)}</div>
+
+          ${(preRegBadge(stop) || workBadge)
+            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">${preRegBadge(stop)}${workBadge}</div>`
+            : ''}
+
+          ${driveLine}
+          ${fuelLine}
+          ${campsiteBlock}
+          ${vignetteBadge}
+          ${border}
+
+          <div class="popup__actions">${actions.join('')}</div>
+
+          <details>
+            <summary>Things to do + budget</summary>
+            ${kid}
+            ${top3 ? `<ul class="popup__top3">${top3}</ul>` : ''}
+            <div class="popup__budget">💰 Estimated daily budget: ~€${stop.daily_budget_eur}/day</div>
+            ${dayTrip}
+            ${special}
+          </details>
+        </div>
+      `;
+    }
+
+    function computeTotals(data) {
+      const { stops, constants, meta } = data;
+      let camp_paid = 0, camp_due = 0, fuel = 0;
+      let vig_paid = 0, vig_due = 0;
+      for (const s of stops) {
+        if (s.campsite_price_eur && s.nights > 0) {
+          const estimate = s.campsite_price_eur * s.nights;
+          if (s.campsite_paid) {
+            camp_paid += (s.campsite_total_paid_eur != null ? s.campsite_total_paid_eur : estimate);
+          } else {
+            camp_due += estimate;
+          }
+        }
+        if (s.distance_km_from_prev > 0) {
+          fuel += fuelCostForLegEur(s.distance_km_from_prev, constants);
+        }
+        if (s.vignette_paid !== undefined) {
+          const amount = s.country === 'CH'
+            ? Math.round(constants.swiss_vignette_chf * CHF_TO_EUR)
+            : constants.austrian_vignette_eur;
+          if (s.vignette_paid) vig_paid += amount;
+          else vig_due += amount;
+        }
+      }
+      const van = meta.van_rental_eur || 0;
+      return {
+        camping: { paid: camp_paid, due: camp_due, total: camp_paid + camp_due },
+        fuel,
+        vignettes: { paid: vig_paid, due: vig_due, total: vig_paid + vig_due },
+        van_rental: van,
+        van_rental_paid: !!meta.van_rental_paid,
+        grand_total: camp_paid + camp_due + fuel + vig_paid + vig_due + van,
+      };
+    }
+
+    function stopForDay(dayIso, stops) {
+      for (const stop of stops) {
+        if (!stop.check_in) continue;
+        if (stop.check_out) {
+          if (stop.check_in <= dayIso && dayIso < stop.check_out) return stop;
+        } else if (stop.check_in === dayIso) {
+          return stop;
+        }
+      }
+      // Fallback: last stop that checks in on or before this day
+      let last = null;
+      for (const stop of stops) {
+        if (stop.check_in && stop.check_in <= dayIso) last = stop;
+      }
+      return last;
+    }
+
+    function enumerateDays(startIso, endIso) {
+      const parse = iso => {
+        const [y, m, d] = iso.split('-').map(Number);
+        return new Date(Date.UTC(y, m - 1, d));
+      };
+      const out = [];
+      const d = parse(startIso);
+      const end = parse(endIso);
+      while (d <= end) {
+        const y = d.getUTCFullYear();
+        const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        out.push(`${y}-${mo}-${dd}`);
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+      return out;
+    }
+
+    function renderSidebar(data, totals) {
+      const { stops, constants, meta } = data;
+      const fmt = (n) => `€${Math.round(n).toLocaleString('en-GB')}`;
+      const isSecured = (s) => s.campsite_paid === true || s.campsite_booked === true;
+      const mustBook = stops
+        .filter(s => s.pre_reg === 'yes' || s.pre_reg === 'recommended')
+        .sort((a, b) => isSecured(a) - isSecured(b));
+
+      const paidTick = (isPaid) => isPaid ? '<span class="done" style="margin-right:4px">✅</span>' : '';
+
+      const campRow = `
+        <li>
+          <span class="label">🏕️ Camping</span>
+          <span class="value">${paidTick(totals.camping.paid && !totals.camping.due)}${fmt(totals.camping.total)}</span>
+        </li>
+      `;
+
+      const vigRow = `
+        <li>
+          <span class="label">🛣️ Vignettes</span>
+          <span class="value">${paidTick(totals.vignettes.paid && !totals.vignettes.due)}${fmt(totals.vignettes.total)}</span>
+        </li>
+        <li style="padding-top:0">
+          <span class="split-paid">🇨🇭 CHF ${constants.swiss_vignette_chf} · 🇦🇹 €${constants.austrian_vignette_eur}</span>
+        </li>
+      `;
+
+      const vanRow = `
+        <li>
+          <span class="label">🚐 Van rental</span>
+          <span class="value">${paidTick(totals.van_rental_paid)}${fmt(totals.van_rental)}</span>
+        </li>
+      `;
+
+      const bookItems = mustBook.map(s => {
+        const secured = isSecured(s);
+        const badge = secured
+          ? '<span class="paid done">✅</span>'
+          : '<span class="paid todo">⏳</span>';
+        const urgency = secured ? '' : (s.pre_reg === 'yes' ? '🔴 ' : '🟡 ');
+        return `<li data-stop-id="${s.id}" class="${secured ? 'is-paid' : ''}" title="${escapeHtml(s.pre_reg_note || '')}">
+          <span class="dot" style="background:${s.color}"></span>
+          <span class="name">${urgency}${escapeHtml(s.name)}</span>
+          ${badge}
+        </li>`;
+      }).join('');
+
+      document.getElementById('sidebar').innerHTML = `
+        <div class="sidebar__header">
+          <h1 class="sidebar__title">${escapeHtml(meta.title)}</h1>
+          <div class="sidebar__dates">May 8–29, 2026 · ${constants.total_nights} nights</div>
+          <div class="sidebar__meta">
+            🚗 ${constants.total_distance_km.toLocaleString('en-GB')} km<br>
+            👥 ${meta.who.join(', ')}<br>
+            🚐 ${escapeHtml(meta.van)}
+          </div>
+        </div>
+
+        <div class="sidebar__section">
+          <h2>Before you go</h2>
+          <div class="warning">⚠️ Buy <a href="https://vignette.ch" target="_blank" rel="noopener">Swiss vignette</a> before Lucerne (CHF ${constants.swiss_vignette_chf}) — <em>needs licence plate, so only after van pickup in Templin</em></div>
+          <div class="warning">⚠️ Buy <a href="https://vignette.at" target="_blank" rel="noopener">Austrian vignette</a> before Innsbruck (€${constants.austrian_vignette_eur}/10 days) — <em>needs licence plate, so only after van pickup</em></div>
+        </div>
+
+        ${mustBook.length ? `
+        <div class="sidebar__section">
+          <h2>Must book ahead (${mustBook.filter(s => !isSecured(s)).length})</h2>
+          <ul class="book-list">${bookItems}</ul>
+        </div>` : ''}
+
+        <div class="sidebar__spacer"></div>
+
+        <details class="sidebar__budget">
+          <summary>
+            <span class="sidebar__budget-label">💰 Budget</span>
+            <span class="sidebar__budget-total">${fmt(totals.grand_total)}</span>
+          </summary>
+          <ul class="totals-list">
+            ${campRow}
+            <li>
+              <span class="label">⛽ Fuel <span style="color:var(--muted);font-size:11px">(est)</span></span>
+              <span class="value">${fmt(totals.fuel)}</span>
+            </li>
+            ${vigRow}
+            ${vanRow}
+            <li class="grand">
+              <span class="label">Grand total</span>
+              <span class="value">${fmt(totals.grand_total)}</span>
+            </li>
+          </ul>
+        </details>
+      `;
+    }
+
+    function renderTimeline(data, onDayClick) {
+      const { stops, meta } = data;
+      const checkIns = stops.map(s => s.check_in).filter(Boolean).sort();
+      const start = checkIns[0];
+      const end = checkIns[checkIns.length - 1];
+      const days = enumerateDays(start, end);
+      const birthday = meta.kid_birthday;
+
+      const html = days.map((iso, i) => {
+        const stop = stopForDay(iso, stops);
+        const day = Number(iso.split('-')[2]);
+        const showCake = iso === birthday;
+        if (!stop) {
+          return `<div class="timeline__cell timeline__cell--empty"><span class="timeline__day">${day}</span></div>`;
+        }
+        // Only the first cell of each stop's span renders the name label, and the label spans the full stop's width.
+        const prevStop = i > 0 ? stopForDay(days[i - 1], stops) : null;
+        const isFirst = !prevStop || prevStop.id !== stop.id;
+        let spanCells = 0;
+        if (isFirst) {
+          for (let j = i; j < days.length; j++) {
+            const s = stopForDay(days[j], stops);
+            if (s && s.id === stop.id) spanCells++; else break;
+          }
+        }
+        const nameBadge = isFirst
+          ? `<span class="timeline__name" style="width:calc(${spanCells * 100}% - 6px)">${escapeHtml(stop.name)}</span>`
+          : '';
+        return `<div class="timeline__cell" data-stop-id="${stop.id}" data-iso="${iso}" style="background:${stop.color}" title="${escapeHtml(stop.name)} · ${iso}">
+          ${nameBadge}
+          ${showCake ? '<span class="timeline__cake">🎂</span>' : ''}
+          <span class="timeline__day">${day}</span>
+        </div>`;
+      }).join('');
+
+      const el = document.getElementById('timeline');
+      el.innerHTML = html + '<div class="timeline__van" id="timeline-van">🚐</div>';
+      el.addEventListener('click', e => {
+        const cell = e.target.closest('.timeline__cell');
+        if (!cell) return;
+        const id = Number(cell.dataset.stopId);
+        if (id) onDayClick(id);
+      });
+    }
+
+    function init(data) {
+      const stops = data.stops;
+      const constants = data.constants;
+      const totals = computeTotals(data);
+
+      const map = L.map('map', {
+        zoomControl: true,
+        scrollWheelZoom: true,
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      }).addTo(map);
+
+      // Route: dashed animated segment per leg, colored by destination.
+      // Start with straight lines; replace with actual road geometry from OSRM once fetched.
+      const segmentStyle = (color) => ({
+        color,
+        weight: 3,
+        opacity: 0.85,
+        className: 'trip-segment',
+        interactive: false,
+      });
+      const segments = [];
+      for (let i = 1; i < stops.length; i++) {
+        const from = stops[i - 1];
+        const to = stops[i];
+        const line = L.polyline([from.coords, to.coords], segmentStyle(to.color)).addTo(map);
+        segments.push({ line, from, to });
+      }
+
+      // Fetch road routes in parallel, cache in localStorage, replace the straight lines.
+      segments.forEach(async (seg) => {
+        const coords = await fetchRoadRoute(seg.from, seg.to);
+        if (!coords) return;
+        map.removeLayer(seg.line);
+        seg.line = L.polyline(coords, segmentStyle(seg.to.color)).addTo(map);
+      });
+
+      // Markers with popups
+      const markerById = new Map();
+      stops.forEach((stop, i) => {
+        const icon = L.divIcon({
+          className: 'stop-marker-wrap',
+          html: `<div class="stop-marker" style="background:${stop.color}">${stop.id}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+        const marker = L.marker(stop.coords, { icon, title: stop.name }).addTo(map);
+        const prev = i > 0 ? stops[i - 1] : null;
+        const next = i < stops.length - 1 ? stops[i + 1] : null;
+        const side = pickPopupSide(stop, prev, next);
+        marker.bindPopup(buildPopupHtml(stop, prev, next, constants), {
+          maxWidth: 320,
+          minWidth: 300,
+          autoPan: false,
+          keepInView: false,
+          className: 'popup-side-' + side,
+        });
+        markerById.set(stop.id, marker);
+      });
+
+      const bounds = L.latLngBounds(stops.map(s => s.coords));
+      map.fitBounds(bounds, { padding: [40, 40] });
+
+      // Cross-component navigation (timeline, sidebar, popup prev/next)
+      window.goToStop = (stopId) => {
+        const stop = stops.find(s => s.id === stopId);
+        const marker = markerById.get(stopId);
+        if (!stop || !marker) return;
+        map.panTo(stop.coords, { animate: true });
+        marker.openPopup();
+      };
+
+      // Track the currently open stop (for keyboard nav + timeline highlight)
+      let currentStopId = null;
+
+      const getTimelineEls = () => ({
+        timelineEl: document.getElementById('timeline'),
+        van: document.getElementById('timeline-van'),
+      });
+
+      const updateVan = () => {
+        const { timelineEl, van } = getTimelineEls();
+        if (!timelineEl || !van) return;
+        const active = timelineEl.querySelectorAll('.timeline__cell--active');
+        if (!active.length) {
+          van.classList.remove('timeline__van--visible');
+          return;
+        }
+        const tlRect = timelineEl.getBoundingClientRect();
+        const firstRect = active[0].getBoundingClientRect();
+        const lastRect = active[active.length - 1].getBoundingClientRect();
+        const midpoint = ((firstRect.left + lastRect.right) / 2) - tlRect.left;
+        van.style.left = midpoint + 'px';
+        van.classList.add('timeline__van--visible');
+      };
+
+      const clearTimelineHighlight = () => {
+        const { timelineEl, van } = getTimelineEls();
+        if (!timelineEl) return;
+        timelineEl.querySelectorAll('.timeline__cell--active').forEach(c => c.classList.remove('timeline__cell--active'));
+        if (van) van.classList.remove('timeline__van--visible');
+      };
+
+      const setActiveSegment = (stopId) => {
+        segments.forEach(seg => {
+          const el = seg.line.getElement && seg.line.getElement();
+          if (!el) return;
+          if (stopId != null && seg.to.id === stopId) el.classList.add('trip-segment--active');
+          else el.classList.remove('trip-segment--active');
+        });
+      };
+
+      map.on('popupopen', (e) => {
+        for (const [id, m] of markerById) {
+          if (m === e.popup._source) { currentStopId = id; break; }
+        }
+        clearTimelineHighlight();
+        const { timelineEl } = getTimelineEls();
+        if (timelineEl) {
+          timelineEl.querySelectorAll(`.timeline__cell[data-stop-id="${currentStopId}"]`)
+            .forEach(c => c.classList.add('timeline__cell--active'));
+        }
+        updateVan();
+        setActiveSegment(currentStopId);
+      });
+      map.on('popupclose', () => {
+        currentStopId = null;
+        clearTimelineHighlight();
+        setActiveSegment(null);
+      });
+      window.addEventListener('resize', updateVan);
+
+      // Arrow keys step through stops while a popup is open
+      window.addEventListener('keydown', (e) => {
+        if (currentStopId == null) return;
+        const tag = (e.target.tagName || '').toUpperCase();
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+        const idx = stops.findIndex(s => s.id === currentStopId);
+        if (e.key === 'ArrowRight' && idx < stops.length - 1) {
+          e.preventDefault();
+          window.goToStop(stops[idx + 1].id);
+        } else if (e.key === 'ArrowLeft' && idx > 0) {
+          e.preventDefault();
+          window.goToStop(stops[idx - 1].id);
+        }
+      });
+
+      // Sidebar + timeline
+      renderSidebar(data, totals);
+      renderTimeline(data, window.goToStop);
+
+      // Deep link: ?open=N opens that stop's popup on load
+      const openParam = Number(new URLSearchParams(location.search).get('open'));
+      if (openParam && markerById.has(openParam)) {
+        setTimeout(() => window.goToStop(openParam), 50);
+      }
+
+      // Click handler for "must book ahead" list items
+      document.getElementById('sidebar').addEventListener('click', e => {
+        const li = e.target.closest('.book-list li[data-stop-id]');
+        if (!li) return;
+        window.goToStop(Number(li.dataset.stopId));
+        closeSidebar(); // on mobile, jump back to the map
+      });
+
+      // Mobile sidebar toggle
+      const sidebarEl = document.getElementById('sidebar');
+      const backdropEl = document.getElementById('sidebar-backdrop');
+      const menuBtn = document.getElementById('menu-toggle');
+      const openSidebar = () => {
+        sidebarEl.classList.add('sidebar--open');
+        backdropEl.classList.add('sidebar-backdrop--visible');
+      };
+      const closeSidebar = () => {
+        sidebarEl.classList.remove('sidebar--open');
+        backdropEl.classList.remove('sidebar-backdrop--visible');
+      };
+      menuBtn.addEventListener('click', () => {
+        if (sidebarEl.classList.contains('sidebar--open')) closeSidebar();
+        else openSidebar();
+      });
+      backdropEl.addEventListener('click', closeSidebar);
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeSidebar();
+      });
+    }
+  </script>
+</body>
+</html>
