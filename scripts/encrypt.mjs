@@ -1,10 +1,15 @@
 import { webcrypto as crypto } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const ITERATIONS = 600_000;
 const PLAIN_PATH = './data/trip.json';
 const OUT_PATH = './data/trip.enc.json';
+
+// Auto-load .env if present (Node 21+). Holds TRIP_PASSWORD=... locally.
+if (existsSync('.env') && typeof process.loadEnvFile === 'function') {
+  process.loadEnvFile('.env');
+}
 
 function promptHidden(question) {
   return new Promise((resolve, reject) => {
