@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 const ITERATIONS = 600_000;
 const PLAIN_PATH = './data/trip.json';
 const OUT_PATH = './data/trip.enc.json';
+const PUBLIC_OUT_PATH = './data/trip-public.json';
 
 // Auto-load .env if present (Node 21+). Holds TRIP_PASSWORD=... locally.
 if (existsSync('.env') && typeof process.loadEnvFile === 'function') {
@@ -46,7 +47,7 @@ function promptHidden(question) {
 }
 
 async function main() {
-  let plaintext;
+  let plaintext, parsed;
   try {
     plaintext = readFileSync(PLAIN_PATH, 'utf-8');
   } catch (err) {
@@ -54,7 +55,7 @@ async function main() {
     process.exit(1);
   }
   try {
-    JSON.parse(plaintext);
+    parsed = JSON.parse(plaintext);
   } catch (err) {
     console.error(`✗ ${PLAIN_PATH} is not valid JSON: ${err.message}`);
     process.exit(1);
@@ -109,6 +110,17 @@ async function main() {
   console.log(`✓ Wrote ${OUT_PATH} (${sizeKB} KB)`);
   console.log(`  Password length: ${password.length} chars`);
   console.log(`  Iterations: ${ITERATIONS.toLocaleString()}`);
+
+  // Public sidecar: dots + colors only, no names/dates/PII
+  const publicData = {
+    stops: (parsed.stops || []).map(s => ({
+      id: s.id,
+      coords: s.coords,
+      color: s.color,
+    })),
+  };
+  writeFileSync(PUBLIC_OUT_PATH, JSON.stringify(publicData));
+  console.log(`✓ Wrote ${PUBLIC_OUT_PATH} (${publicData.stops.length} stops, coords + color only)`);
 }
 
 main().catch(err => {

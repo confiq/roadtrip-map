@@ -27,12 +27,44 @@
     }
     #map {
       position: absolute;
-      left: 280px;
-      right: 0;
-      top: 0;
-      bottom: 54px;
+      inset: 0;
       background: #f5f5f5;
     }
+    body.is-unlocked #map {
+      left: 280px;
+      bottom: 54px;
+    }
+
+    /* Locked state: only map + unlock button visible */
+    body:not(.is-unlocked) .sidebar,
+    body:not(.is-unlocked) .timeline,
+    body:not(.is-unlocked) .menu-toggle { display: none !important; }
+    body:not(.is-unlocked) .leaflet-top.leaflet-left { left: 120px; }
+
+    /* Unlock button: shown when locked, hidden when unlocked */
+    .unlock-btn {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 700;
+      padding: 9px 14px;
+      border-radius: 8px;
+      background: #fff;
+      border: none;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+    body:not(.is-unlocked) .unlock-btn { display: inline-flex; }
+    .unlock-btn:hover { background: #f7f7f7; }
+    .unlock-btn:active { transform: scale(0.96); }
 
     /* Sidebar */
     .sidebar {
@@ -318,10 +350,10 @@
 
     /* Mobile layout: <768px */
     @media (max-width: 767px) {
-      #map {
+      body.is-unlocked #map {
         left: 0;
       }
-      .menu-toggle {
+      body.is-unlocked .menu-toggle {
         display: flex;
       }
       .sidebar {
@@ -773,6 +805,7 @@
   </style>
 </head>
 <body>
+  <button class="unlock-btn" id="unlock-btn" aria-label="Unlock trip details" type="button">🔒 Unlock</button>
   <button class="menu-toggle" id="menu-toggle" aria-label="Open menu" type="button">☰</button>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
   <aside class="sidebar" id="sidebar"></aside>
@@ -781,25 +814,42 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    // --- Encrypted trip data: fetch ciphertext, derive key from URL hash or prompt, decrypt, then init ---
+    // --- Two-tier data: trip-public.json renders the bare map for everyone;
+    // trip.enc.json decrypts in-browser to reveal names, dates, notes, bookings. ---
+    let mapState = null;       // { map, segments, markerById } — set by renderPublicMap
+    let encPayload = null;     // lazily used for unlock
+
     (async function start() {
-      let encPayload;
+      let publicData;
       try {
-        const res = await fetch('./data/trip.enc.json');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        encPayload = await res.json();
+        const [pubRes, encRes] = await Promise.all([
+          fetch('./data/trip-public.json'),
+          fetch('./data/trip.enc.json'),
+        ]);
+        if (!pubRes.ok) throw new Error('public HTTP ' + pubRes.status);
+        if (!encRes.ok) throw new Error('enc HTTP ' + encRes.status);
+        publicData = await pubRes.json();
+        encPayload = await encRes.json();
       } catch (err) {
         showLoadError(err);
         return;
       }
 
       const hashPwd = location.hash ? decodeURIComponent(location.hash.slice(1)) : '';
-      if (hashPwd) {
-        const data = await tryDecrypt(encPayload, hashPwd);
-        if (data) { init(data); return; }
-      }
-      showLockScreen(encPayload);
+      const privateData = hashPwd ? await tryDecrypt(encPayload, hashPwd) : null;
+      // Set layout class BEFORE rendering so Leaflet measures the final container.
+      if (privateData) document.body.classList.add('is-unlocked');
+
+      mapState = renderPublicMap(publicData);
+
+      if (privateData) enrichWithPrivate(privateData);
+      else setupUnlockButton();
     })();
+
+    function setupUnlockButton() {
+      const btn = document.getElementById('unlock-btn');
+      btn.addEventListener('click', () => showLockScreen(encPayload));
+    }
 
     async function tryDecrypt(payload, password) {
       try {
@@ -854,6 +904,15 @@
       const btn = overlay.querySelector('#lock-btn');
       const errEl = overlay.querySelector('#lock-error');
 
+      // Dismiss: click the backdrop or press Escape
+      const dismiss = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
+      document.addEventListener('keydown', onKey);
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const pwd = input.value;
@@ -862,8 +921,9 @@
         const data = await tryDecrypt(encPayload, pwd);
         if (data) {
           history.replaceState(null, '', '#' + encodeURIComponent(pwd));
+          document.removeEventListener('keydown', onKey);
           overlay.remove();
-          init(data);
+          enrichWithPrivate(data);
         } else {
           btn.disabled = false; input.disabled = false;
           errEl.textContent = 'Wrong password.';
@@ -1331,10 +1391,8 @@
       });
     }
 
-    function init(data) {
-      const stops = data.stops;
-      const constants = data.constants;
-      const totals = computeTotals(data);
+    function renderPublicMap(publicData) {
+      const stops = publicData.stops;
 
       const map = L.map('map', {
         zoomControl: true,
@@ -1347,8 +1405,6 @@
         maxZoom: 20,
       }).addTo(map);
 
-      // Route: dashed animated segment per leg, colored by destination.
-      // Start with straight lines; replace with actual road geometry from OSRM once fetched.
       const segmentStyle = (color) => ({
         color,
         weight: 3,
@@ -1363,8 +1419,6 @@
         const line = L.polyline([from.coords, to.coords], segmentStyle(to.color)).addTo(map);
         segments.push({ line, from, to });
       }
-
-      // Fetch road routes in parallel, cache in localStorage, replace the straight lines.
       segments.forEach(async (seg) => {
         const coords = await fetchRoadRoute(seg.from, seg.to);
         if (!coords) return;
@@ -1372,16 +1426,39 @@
         seg.line = L.polyline(coords, segmentStyle(seg.to.color)).addTo(map);
       });
 
-      // Markers with popups
       const markerById = new Map();
-      stops.forEach((stop, i) => {
+      stops.forEach((stop) => {
         const icon = L.divIcon({
           className: 'stop-marker-wrap',
           html: `<div class="stop-marker" style="background:${stop.color}">${stop.id}</div>`,
           iconSize: [28, 28],
           iconAnchor: [14, 14],
         });
-        const marker = L.marker(stop.coords, { icon, title: stop.name }).addTo(map);
+        const marker = L.marker(stop.coords, { icon }).addTo(map);
+        markerById.set(stop.id, marker);
+      });
+
+      const bounds = L.latLngBounds(stops.map(s => s.coords));
+      map.fitBounds(bounds, { padding: [40, 40] });
+
+      return { map, segments, markerById };
+    }
+
+    function enrichWithPrivate(data) {
+      const stops = data.stops;
+      const constants = data.constants;
+      const totals = computeTotals(data);
+      const { map, segments, markerById } = mapState;
+
+      // Reveal sidebar + timeline + reshape #map
+      document.body.classList.add('is-unlocked');
+      map.invalidateSize();
+
+      // Bind popups + hover titles now that names are available
+      stops.forEach((stop, i) => {
+        const marker = markerById.get(stop.id);
+        if (!marker) return;
+        if (marker._icon) marker._icon.setAttribute('title', stop.name);
         const prev = i > 0 ? stops[i - 1] : null;
         const next = i < stops.length - 1 ? stops[i + 1] : null;
         const side = pickPopupSide(stop, prev, next);
@@ -1392,13 +1469,8 @@
           keepInView: false,
           className: 'popup-side-' + side,
         });
-        markerById.set(stop.id, marker);
       });
 
-      const bounds = L.latLngBounds(stops.map(s => s.coords));
-      map.fitBounds(bounds, { padding: [40, 40] });
-
-      // Cross-component navigation (timeline, sidebar, popup prev/next)
       window.goToStop = (stopId) => {
         const stop = stops.find(s => s.id === stopId);
         const marker = markerById.get(stopId);
@@ -1407,7 +1479,6 @@
         marker.openPopup();
       };
 
-      // Track the currently open stop (for keyboard nav + timeline highlight)
       let currentStopId = null;
 
       const getTimelineEls = () => ({
