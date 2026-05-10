@@ -1311,11 +1311,17 @@
           </div>
         </div>
 
+        ${(() => {
+          const swissPaid = stops.some(s => s.country === 'CH' && s.vignette_paid === true);
+          const austrianPaid = stops.some(s => s.country === 'AT' && s.vignette_paid === true);
+          if (swissPaid && austrianPaid) return '';
+          return `
         <div class="sidebar__section">
           <h2>Before you go</h2>
-          <div class="warning">⚠️ Buy <a href="https://vignette.ch" target="_blank" rel="noopener">Swiss vignette</a> before Lucerne (CHF ${constants.swiss_vignette_chf}) — <em>needs licence plate, so only after van pickup in Templin</em></div>
-          <div class="warning">⚠️ Buy <a href="https://vignette.at" target="_blank" rel="noopener">Austrian vignette</a> before Innsbruck (€${constants.austrian_vignette_eur}/10 days) — <em>needs licence plate, so only after van pickup</em></div>
-        </div>
+          ${swissPaid ? '' : `<div class="warning">⚠️ Buy <a href="https://vignette.ch" target="_blank" rel="noopener">Swiss vignette</a> before Lucerne (CHF ${constants.swiss_vignette_chf}) — <em>needs licence plate, so only after van pickup in Templin</em></div>`}
+          ${austrianPaid ? '' : `<div class="warning">⚠️ Buy <a href="https://vignette.at" target="_blank" rel="noopener">Austrian vignette</a> before Innsbruck (€${constants.austrian_vignette_eur}/10 days) — <em>needs licence plate, so only after van pickup</em></div>`}
+        </div>`;
+        })()}
 
         ${mustBook.length ? `
         <div class="sidebar__section">
